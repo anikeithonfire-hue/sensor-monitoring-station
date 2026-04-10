@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sensor Monitoring Station</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #111; }
+ 
+    header {
+      background: #ffffff;
+      border-bottom: 1px solid #e5e5e5;
+      padding: 18px 28px;
+    }
+    header h1 { font-size: 18px; font-weight: 500; }
+    header p  { font-size: 13px; color: #888; margin-top: 3px; }
+ 
+    .container { padding: 20px 28px; }
+ 
+    /* ── LED status bar ── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 18px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      font-weight: 500;
+      border: 1px solid;
+    }
+    .status-bar.green { background: #f0fdf4; border-color: #86efac; color: #166534; }
+    .status-bar.red   { background: #fff1f2; border-color: #fca5a5; color: #991b1b; }
+    .led {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .led.green { background: #22c55e; }
+    .led.red   { background: #ef4444; animation: blink .8s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+ 
+    /* ── Metric cards ── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid #e5e5e5;
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .card-label { font-size: 12px; color: #888; margin-bottom: 6px; }
+    .card-value { font-size: 26px; font-weight: 500; }
+    .card-unit  { font-size: 13px; color: #888; margin-left: 3px; }
+    .card.alarm .card-value { color: #dc2626; }
+ 
+    /* ── Charts ── */
+    .charts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .chart-box {
+      background: #ffffff;
+      border: 1px solid #e5e5e5;
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .chart-box h3 { font-size: 13px; font-weight: 500; color: #555; margin-bottom: 12px; }
+    .chart-box canvas { width: 100% !important; height: 180px !important; }
+ 
+    /* ── Fault buttons ── */
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .controls label { font-size: 13px; color: #666; align-self: center; }
+    button {
+      font-size: 13px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid #d0d0d0;
+      background: #ffffff;
+      cursor: pointer;
+    }
+    button:hover { background: #f5f5f5; }
+    button.danger { border-color: #fca5a5; color: #dc2626; }
+    button.danger:hover { background: #fff1f2; }
+    button.safe  { border-color: #86efac; color: #166534; }
+    button.safe:hover  { background: #f0fdf4; }
+ 
+    /* ── Log table ── */
+    .log-box {
+      background: #ffffff;
+      border: 1px solid #e5e5e5;
+      border-radius: 10px;
+      padding: 16px;
+      overflow-x: auto;
+    }
+    .log-box h3 { font-size: 13px; font-weight: 500; color: #555; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 6px 10px; color: #888; border-bottom: 1px solid #e5e5e5; }
+    td { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; }
+    tr:last-child td { border-bottom: none; }
+  </style>
+</head>
+<body>
+ 
+<header>
+  <h1>Sensor Monitoring Station</h1>
+  <p>Simulated DHT22 · BMP280 · MQ-2 &nbsp;|&nbsp; Live readings every second</p>
+</header>
+ 
+<div class="container">
+ 
+  <!-- Status bar -->
+  <div class="status-bar green" id="status-bar">
+    <div class="led green" id="led"></div>
+    <span id="status-text">Loading...</span>
+  </div>
+ 
+  <!-- Metric cards -->
+  <div class="cards" id="cards">
+    <div class="card"><div class="card-label">Temperature</div><div class="card-value" id="v-temp">--<span class="card-unit">°C</span></div></div>
+    <div class="card"><div class="card-label">Humidity</div><div class="card-value" id="v-hum">--<span class="card-unit">%</span></div></div>
+    <div class="card"><div class="card-label">Pressure</div><div class="card-value" id="v-pres">--<span class="card-unit">hPa</span></div></div>
+    <div class="card"><div class="card-label">Gas level</div><div class="card-value" id="v-gas">--<span class="card-unit">ppm</span></div></div>
+  </div>
+ 
+  <!-- Fault controls -->
+  <div class="controls">
+    <label>Inject fault:</label>
+    <button class="danger" onclick="injectFault('high_temp')">High temperature</button>
+    <button class="danger" onclick="injectFault('gas_leak')">Gas leak</button>
+    <button class="danger" onclick="injectFault('humidity_drop')">Humidity drop</button>
+    <button class="safe"   onclick="clearFault()">Clear fault</button>
+  </div>
+ 
+  <!-- Charts -->
+  <div class="charts">
+    <div class="chart-box"><h3>Temperature (°C)</h3><canvas id="c-temp"></canvas></div>
