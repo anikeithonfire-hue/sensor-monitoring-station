@@ -148,3 +148,132 @@
   <!-- Charts -->
   <div class="charts">
     <div class="chart-box"><h3>Temperature (°C)</h3><canvas id="c-temp"></canvas></div>
+
+     <div class="chart-box"><h3>Humidity (%)</h3><canvas id="c-hum"></canvas></div>
+    <div class="chart-box"><h3>Pressure (hPa)</h3><canvas id="c-pres"></canvas></div>
+    <div class="chart-box"><h3>Gas level (ppm)</h3><canvas id="c-gas"></canvas></div>
+  </div>
+ 
+  <!-- Log table -->
+  <div class="log-box">
+    <h3>Recent readings log</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Temp (°C)</th>
+          <th>Humidity (%)</th>
+          <th>Pressure (hPa)</th>
+          <th>Gas (ppm)</th>
+        </tr>
+      </thead>
+      <tbody id="log-body"></tbody>
+    </table>
+  </div>
+ 
+</div>
+ 
+<script>
+const MAX = 60;
+ 
+function makeChart(id, color) {
+  return new Chart(document.getElementById(id), {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        borderColor: color,
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: false,
+      }]
+    },
+    options: {
+      responsive: false,
+      animation: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: { grid: { color: "#f0f0f0" }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+ 
+const charts = {
+  temp : makeChart("c-temp",  "#2980b9"),
+  hum  : makeChart("c-hum",   "#27ae60"),
+  pres : makeChart("c-pres",  "#e67e22"),
+  gas  : makeChart("c-gas",   "#e74c3c"),
+};
+ 
+function pushChart(chart, label, value) {
+  if (chart.data.labels.length >= MAX) {
+    chart.data.labels.shift();
+    chart.data.datasets[0].data.shift();
+  }
+  chart.data.labels.push(label);
+  chart.data.datasets[0].data.push(value);
+  chart.update();
+}
+ 
+function setStatus(alarm, message) {
+  const bar = document.getElementById("status-bar");
+  const led = document.getElementById("led");
+  const txt = document.getElementById("status-text");
+  bar.className = "status-bar " + (alarm ? "red" : "green");
+  led.className = "led " + (alarm ? "red" : "green");
+  txt.textContent = message;
+}
+ 
+async function fetchData() {
+  try {
+    const r = await fetch("/api/data");
+    const d = await r.json();
+ 
+    // Metric cards
+    document.getElementById("v-temp").innerHTML = d.latest.temp + '<span class="card-unit">°C</span>';
+    document.getElementById("v-hum").innerHTML  = d.latest.humidity + '<span class="card-unit">%</span>';
+    document.getElementById("v-pres").innerHTML = d.latest.pressure + '<span class="card-unit">hPa</span>';
+    document.getElementById("v-gas").innerHTML  = d.latest.gas + '<span class="card-unit">ppm</span>';
+ 
+    setStatus(d.alarm, d.alarm_message);
+ 
+    // Charts — push latest point
+    const ts = d.latest.timestamp.slice(11, 19);
+    pushChart(charts.temp, ts, d.latest.temp);
+    pushChart(charts.hum,  ts, d.latest.humidity);
+    pushChart(charts.pres, ts, d.latest.pressure);
+    pushChart(charts.gas,  ts, d.latest.gas);
+ 
+    // Log table (last 10)
+    const tbody = document.getElementById("log-body");
+    tbody.innerHTML = "";
+    d.recent.slice(-10).reverse().forEach(row => {
+      tbody.innerHTML += `<tr>
+        <td>${row.timestamp}</td>
+        <td>${row.temp}</td>
+        <td>${row.humidity}</td>
+        <td>${row.pressure}</td>
+        <td>${row.gas}</td>
+      </tr>`;
+    });
+ 
+  } catch (e) { console.error(e); }
+}
+ 
+async function injectFault(type) {
+  await fetch("/api/fault/" + type, { method: "POST" });
+}
+async function clearFault() {
+  await fetch("/api/fault/clear", { method: "POST" });
+}
+ 
+fetchData();
+setInterval(fetchData, 1000);
+</script>
+</body>
+</html>
+ 
